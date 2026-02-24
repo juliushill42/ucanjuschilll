@@ -1,0 +1,14 @@
+.env
+ssl/
+postgres_data/
+redis_data/
+uploads_data/
+hls_data/
+ai_tmp/
+node_modules/
+.next/
+target/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store

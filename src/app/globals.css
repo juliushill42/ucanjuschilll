@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { background: black; color: white; margin: 0; padding: 0; }
+
+/* GRADE A SPACING FIX */
+main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 140px 2rem 5rem 2rem !important; /* Pushes text way down away from Nav */
+    text-align: center;
+}
+
+h1 {
+    font-size: clamp(2.5rem, 8vw, 5.5rem) !important;
+    margin-bottom: 4rem !important; /* Forces the gap */
+    line-height: 1.1;
+    font-weight: 900;
+}
+
+p {
+    line-height: 1.8 !important; 
+    max-width: 800px;
+    font-size: 1.25rem;
+    color: rgba(255,255,255,0.9);
+}
