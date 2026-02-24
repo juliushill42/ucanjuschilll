@@ -14,10 +14,6 @@ const loginSchema = z.object({
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
-  pages: {
-    signIn: '/login',
-    error: '/login',
-  },
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? '',
@@ -32,40 +28,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         const parsed = loginSchema.safeParse(credentials)
         if (!parsed.success) return null
-
         const user = await prisma.user.findUnique({
           where: { email: parsed.data.email },
         })
-
         if (!user || !user.passwordHash) return null
-
         const valid = await bcrypt.compare(parsed.data.password, user.passwordHash)
         if (!valid) return null
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.displayName,
-          image: user.avatarUrl,
-          username: user.username,
-        }
+        return { id: user.id, email: user.email, name: user.displayName, username: user.username }
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id
-        token.username = (user as { username?: string }).username
-      }
-      return token
-    },
-    async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id as string
-        session.user.username = token.username as string
-      }
-      return session
-    },
-  },
 })
+
