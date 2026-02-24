@@ -3,13 +3,12 @@ import Link from 'next/link'
 export default function HomePage() {
   return (
     <main className="relative min-h-screen w-full overflow-hidden bg-black">
-      {/* THE GIRL STAYS */}
+      {/* THE GIRL STAYS - Using hero.jpg from your recent commit */}
       <div 
         className="absolute inset-0 z-0 opacity-60 bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: "url('/hero.jpg')" }} 
       />
       
-      {/* Cinematic Overlay */}
       <div className="absolute inset-0 z-10 bg-gradient-to-b from-black/70 via-transparent to-black" />
 
       <div className="relative z-20 flex flex-col items-center justify-center min-h-screen px-6 text-center">
