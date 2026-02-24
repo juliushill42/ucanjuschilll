@@ -28,3 +28,5 @@ Profile → Reveal Stream Key → OBS: `rtmp://yourserver/live` + key
 Update `.env` with your domain, add SSL certs to `./ssl/`, run `docker compose up -d`
 
 Built for ucanjuschill.com 💯
+
+
