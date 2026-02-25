@@ -1,0 +1,24 @@
+# ============================================================
+# ASTRA PLATFORM — Environment Variables
+# Julius Cameron Hill IP
+# NEVER commit real values to git
+# ============================================================
+
+# ── POSTGRES ────────────────────────────────────────────────
+POSTGRES_USER=astra_admin
+POSTGRES_PASSWORD=CHANGE_ME_STRONG_PASSWORD
+POSTGRES_DB=astra_platform
+
+# ── REDIS ───────────────────────────────────────────────────
+REDIS_PASSWORD=CHANGE_ME_REDIS_PASSWORD
+
+# ── JWT ─────────────────────────────────────────────────────
+JWT_SECRET=CHANGE_ME_MINIMUM_32_CHARS_RANDOM_STRING
+
+# ── RUNPOD / GPU ─────────────────────────────────────────────
+RUNPOD_API_KEY=your_runpod_key
+GPU_WORKER_URL=https://your-pod.runpod.io
+
+# ── PORTS ───────────────────────────────────────────────────
+ASTRA_PORT=8080
+RTMP_PORT=1935

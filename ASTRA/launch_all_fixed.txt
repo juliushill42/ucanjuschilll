@@ -1,0 +1,129 @@
+# ============================================================================
+# TATIANA UNIFIED LAUNCHER (FIXED)
+# Starts all services with ONE config, proper logging, and health checks
+# Owner: Julius Cameron Hill (Ju)
+# ============================================================================
+
+$ErrorActionPreference = "Stop"
+Set-Location "D:\Tatiana"
+
+# --- LOAD CONFIG ---
+Write-Host "[BOOT] Loading unified config..." -ForegroundColor Cyan
+if (-not (Test-Path ".env")) {
+    Write-Host "[ERROR] .env not found. Create it first." -ForegroundColor Red
+    exit 1
+}
+
+# Parse .env into environment
+Get-Content ".env" | ForEach-Object {
+    if ($_ -match '^\s*([^#][^=]+)=(.*)$') {
+        $key = $matches[1].Trim()
+        $value = $matches[2].Trim()
+        [Environment]::SetEnvironmentVariable($key, $value, "Process")
+    }
+}
+
+$TATIANA_PYTHON = $env:TATIANA_PYTHON
+$RUST_PORT = $env:RUST_ORCHESTRATOR_PORT
+$LOG_FILE = $env:TATIANA_LOG_FILE
+
+# Create logs dir
+New-Item -ItemType Directory -Force -Path "logs" | Out-Null
+
+Write-Host "[BOOT] Tatiana Unified Launcher" -ForegroundColor Green
+Write-Host "[INFO] Python: $TATIANA_PYTHON" -ForegroundColor Gray
+Write-Host "[INFO] Port: $RUST_PORT" -ForegroundColor Gray
+Write-Host "[INFO] Log: $LOG_FILE" -ForegroundColor Gray
+
+# --- STOP EXISTING PROCESSES ---
+Write-Host "[INFO] Stopping existing orchestrator..." -ForegroundColor Yellow
+Get-Process | Where-Object { $_.ProcessName -match "tatiana_orchestrator" } | Stop-Process -Force -ErrorAction SilentlyContinue
+
+# --- BUILD ORCHESTRATOR (if needed) ---
+$ORCHESTRATOR_EXE = "tatiana_orchestrator\target\release\tatiana_orchestrator.exe"
+if (-not (Test-Path $ORCHESTRATOR_EXE)) {
+    Write-Host "[INFO] Building orchestrator..." -ForegroundColor Yellow
+    Set-Location "tatiana_orchestrator"
+    cargo build --release *>&1 | Tee-Object -FilePath "..\$LOG_FILE"
+    Set-Location ".."
+}
+
+if (-not (Test-Path $ORCHESTRATOR_EXE)) {
+    Write-Host "[ERROR] Build failed. Check $LOG_FILE" -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "[OK] Orchestrator ready: $ORCHESTRATOR_EXE" -ForegroundColor Green
+
+# --- START ORCHESTRATOR ---
+Write-Host "[INFO] Starting orchestrator..." -ForegroundColor Cyan
+$orchestratorProcess = Start-Process -FilePath $ORCHESTRATOR_EXE -PassThru -RedirectStandardOutput "logs\orchestrator_out.log" -RedirectStandardError "logs\orchestrator_err.log"
+
+# Wait for startup
+Start-Sleep -Seconds 3
+
+# Health check
+try {
+    $response = Invoke-RestMethod -Uri "http://localhost:$RUST_PORT/state" -TimeoutSec 5
+    Write-Host "[OK] Orchestrator responding on port $RUST_PORT" -ForegroundColor Green
+} catch {
+    Write-Host "[ERROR] Orchestrator failed to start" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    exit 1
+}
+
+# --- OPTIONAL: START VOICE BRIDGE ---
+$VOICE_ENTRY = "tatiana_orchestrator\python_bridge\voice_entry.py"
+if ((Test-Path $VOICE_ENTRY) -and ($env:TATIANA_ENABLE_VOICE -eq "1")) {
+    Write-Host "[INFO] Starting voice bridge..." -ForegroundColor Cyan
+    Start-Process -FilePath $TATIANA_PYTHON -ArgumentList $VOICE_ENTRY -RedirectStandardOutput "logs\voice_out.log" -RedirectStandardError "logs\voice_err.log"
+    Write-Host "[OK] Voice bridge started" -ForegroundColor Green
+}
+
+# --- OPTIONAL: START GO BRIDGE ---
+$GO_BRIDGE = "tatiana_bridge\main.go"
+if ((Test-Path $GO_BRIDGE) -and ($env:TATIANA_ENABLE_BRIDGE -eq "1")) {
+    Write-Host "[INFO] Starting Go bridge..." -ForegroundColor Cyan
+    Set-Location "tatiana_bridge"
+    Start-Process -FilePath "go" -ArgumentList "run", "main.go" -RedirectStandardOutput "..\logs\bridge_out.log" -RedirectStandardError "..\logs\bridge_err.log"
+    Set-Location ".."
+    Write-Host "[OK] Go bridge started on port $env:GO_BRIDGE_PORT" -ForegroundColor Green
+}
+
+# --- OPTIONAL: START TELEMETRY ---
+$TELEMETRY = "telemetry_bridge.py"
+if ((Test-Path $TELEMETRY) -and ($env:TATIANA_ENABLE_TELEMETRY -eq "1")) {
+    Write-Host "[INFO] Starting telemetry..." -ForegroundColor Cyan
+    Start-Process -FilePath $TATIANA_PYTHON -ArgumentList $TELEMETRY -RedirectStandardOutput "logs\telemetry_out.log" -RedirectStandardError "logs\telemetry_err.log"
+    Write-Host "[OK] Telemetry started on port $env:TITAN_TELEMETRY_PORT" -ForegroundColor Green
+}
+
+# --- OPEN UI ---
+if ($env:TATIANA_OPEN_UI -eq "1") {
+    Write-Host "[INFO] Opening UI..." -ForegroundColor Cyan
+    Start-Sleep -Seconds 1
+    Start-Process "http://localhost:$RUST_PORT"
+}
+
+# --- SUMMARY ---
+Write-Host "`n[DONE] Tatiana is running" -ForegroundColor Green
+Write-Host "  Orchestrator: http://localhost:$RUST_PORT" -ForegroundColor White
+Write-Host "  State: http://localhost:$RUST_PORT/state" -ForegroundColor White
+Write-Host "  Logs: $LOG_FILE" -ForegroundColor White
+Write-Host "`nPress Ctrl+C to stop all services." -ForegroundColor Gray
+
+# Keep running and log heartbeat
+try {
+    while ($true) {
+        Start-Sleep -Seconds 10
+        $status = Invoke-RestMethod -Uri "http://localhost:$RUST_PORT/state" -ErrorAction SilentlyContinue
+        if ($status) {
+            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            Write-Host "[$timestamp] Heartbeat: $($status.presence_state)" -ForegroundColor DarkGray
+        }
+    }
+} catch {
+    Write-Host "`n[INFO] Shutting down..." -ForegroundColor Yellow
+    Stop-Process -Id $orchestratorProcess.Id -Force
+    exit 0
+}
