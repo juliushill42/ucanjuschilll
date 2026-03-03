@@ -1,0 +1,95 @@
+# ============================================================
+# UCANJUSCHILL — Cloud Build CI/CD
+# Julius Cameron Hill IP
+# Auto-deploys on every push to main
+# ============================================================
+steps:
+
+  # ── Build Go API ──
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/go-api:$COMMIT_SHA
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/go-api:latest
+      - ./go-api
+    id: build-go-api
+
+  # ── Build Rust Ingest ──
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/ingest:$COMMIT_SHA
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/ingest:latest
+      - ./rust-ingest
+    id: build-ingest
+
+  # ── Build AI Worker ──
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/ai-worker:$COMMIT_SHA
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/ai-worker:latest
+      - ./ai-worker
+    id: build-ai-worker
+
+  # ── Push all images ──
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [push, us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/go-api:$COMMIT_SHA]
+    waitFor: [build-go-api]
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [push, us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/ingest:$COMMIT_SHA]
+    waitFor: [build-ingest]
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [push, us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/ai-worker:$COMMIT_SHA]
+    waitFor: [build-ai-worker]
+
+  # ── Deploy to GKE ──
+  - name: 'gcr.io/cloud-builders/kubectl'
+    args:
+      - set
+      - image
+      - deployment/go-api
+      - go-api=us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/go-api:$COMMIT_SHA
+    env:
+      - CLOUDSDK_COMPUTE_ZONE=us-central1-a
+      - CLOUDSDK_CONTAINER_CLUSTER=ucanjuschill-cluster
+    waitFor: [build-go-api]
+
+  - name: 'gcr.io/cloud-builders/kubectl'
+    args:
+      - set
+      - image
+      - deployment/ingest
+      - ingest=us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/ingest:$COMMIT_SHA
+    env:
+      - CLOUDSDK_COMPUTE_ZONE=us-central1-a
+      - CLOUDSDK_CONTAINER_CLUSTER=ucanjuschill-cluster
+    waitFor: [build-ingest]
+
+  - name: 'gcr.io/cloud-builders/kubectl'
+    args:
+      - set
+      - image
+      - deployment/ai-worker
+      - ai-worker=us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/ai-worker:$COMMIT_SHA
+    env:
+      - CLOUDSDK_COMPUTE_ZONE=us-central1-a
+      - CLOUDSDK_CONTAINER_CLUSTER=ucanjuschill-cluster
+    waitFor: [build-ai-worker]
+
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/go-api:$COMMIT_SHA
+  - us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/ingest:$COMMIT_SHA
+  - us-central1-docker.pkg.dev/$PROJECT_ID/ucanjuschill/ai-worker:$COMMIT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8

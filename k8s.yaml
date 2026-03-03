@@ -1,0 +1,293 @@
+# ============================================================
+# UCANJUSCHILL — Kubernetes Manifests
+# Julius Cameron Hill IP
+# All services: Go API, Rust Ingest, AI Worker, Redis, Nginx
+# ============================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ucanjuschill
+
+---
+# ── Go API Deployment ──
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-api
+  namespace: ucanjuschill
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: go-api
+  template:
+    metadata:
+      labels:
+        app: go-api
+    spec:
+      containers:
+        - name: go-api
+          image: us-central1-docker.pkg.dev/ucanjuschill-prod/ucanjuschill/go-api:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GIN_MODE
+              value: release
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: jwt-secret
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: redis-url
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-api
+  namespace: ucanjuschill
+spec:
+  selector:
+    app: go-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+
+---
+# ── Rust Ingest (RTMP) ──
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingest
+  namespace: ucanjuschill
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ingest
+  template:
+    metadata:
+      labels:
+        app: ingest
+    spec:
+      containers:
+        - name: ingest
+          image: us-central1-docker.pkg.dev/ucanjuschill-prod/ucanjuschill/ingest:latest
+          ports:
+            - containerPort: 1935
+          env:
+            - name: RTMP_BIND
+              value: "0.0.0.0:1935"
+            - name: GO_API_URL
+              value: "http://go-api:8080"
+            - name: HLS_BUCKET
+              value: "gs://ucanjuschill-prod-hls"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingest
+  namespace: ucanjuschill
+spec:
+  type: LoadBalancer
+  selector:
+    app: ingest
+  ports:
+    - port: 1935
+      targetPort: 1935
+      name: rtmp
+
+---
+# ── AI Worker ──
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-worker
+  namespace: ucanjuschill
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-worker
+  template:
+    metadata:
+      labels:
+        app: ai-worker
+    spec:
+      containers:
+        - name: ai-worker
+          image: us-central1-docker.pkg.dev/ucanjuschill-prod/ucanjuschill/ai-worker:latest
+          env:
+            - name: GO_API_URL
+              value: "http://go-api:8080"
+            - name: VERTEX_PROJECT
+              value: "ucanjuschill-prod"
+            - name: VERTEX_REGION
+              value: "us-central1"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+
+---
+# ── Redis ──
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: ucanjuschill
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command: ["redis-server", "--appendonly", "yes"]
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      volumes:
+        - name: redis-data
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: ucanjuschill
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+
+---
+# ── Nginx (CDN + SSL) ──
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: ucanjuschill
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+            - containerPort: 443
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: ucanjuschill
+  annotations:
+    cloud.google.com/load-balancer-type: External
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+    - port: 443
+      targetPort: 443
+      name: https
+
+---
+# ── Horizontal Pod Autoscaler ──
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: go-api-hpa
+  namespace: ucanjuschill
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: go-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
