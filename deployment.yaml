@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: titan-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: titan-api
+  template:
+    metadata:
+      labels:
+        app: titan-api
+    spec:
+      containers:
+      - name: titan-api
+        image: us-east1-docker.pkg.dev/gen-lang-client-0695165560/titan-repo/titan-api:v1
+        ports:
+        - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: titan-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: titan-api
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
