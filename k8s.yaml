@@ -28,7 +28,7 @@ spec:
     spec:
       containers:
         - name: go-api
-          image: us-central1-docker.pkg.dev/ucanjuschill-prod/ucanjuschill/go-api:latest
+          image: us-east1-docker.pkg.dev/gen-lang-client-0695165560/juschill-repo/go-api:latest
           ports:
             - containerPort: 8080
           env:
@@ -101,7 +101,7 @@ spec:
     spec:
       containers:
         - name: ingest
-          image: us-central1-docker.pkg.dev/ucanjuschill-prod/ucanjuschill/ingest:latest
+          image: us-east1-docker.pkg.dev/gen-lang-client-0695165560/juschill-repo/ingest:latest
           ports:
             - containerPort: 1935
           env:
@@ -110,7 +110,7 @@ spec:
             - name: GO_API_URL
               value: "http://go-api:8080"
             - name: HLS_BUCKET
-              value: "gs://ucanjuschill-prod-hls"
+              value: "gs://gen-lang-client-0695165560-hls"
           resources:
             requests:
               cpu: 500m
@@ -153,14 +153,26 @@ spec:
     spec:
       containers:
         - name: ai-worker
-          image: us-central1-docker.pkg.dev/ucanjuschill-prod/ucanjuschill/ai-worker:latest
+          image: us-east1-docker.pkg.dev/gen-lang-client-0695165560/juschill-repo/ai-worker:latest
+          ports:
+            - containerPort: 8001
           env:
             - name: GO_API_URL
               value: "http://go-api:8080"
             - name: VERTEX_PROJECT
-              value: "ucanjuschill-prod"
+              value: "gen-lang-client-0695165560"
             - name: VERTEX_REGION
-              value: "us-central1"
+              value: "us-east1"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: openai-api-key
+            - name: ELEVENLABS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: elevenlabs-api-key
           resources:
             requests:
               cpu: 500m
@@ -168,6 +180,20 @@ spec:
             limits:
               cpu: 2000m
               memory: 2Gi
+
+---
+# ── AI Worker Service ──
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-worker
+  namespace: ucanjuschill
+spec:
+  selector:
+    app: ai-worker
+  ports:
+    - port: 8001
+      targetPort: 8001
 
 ---
 # ── Redis ──

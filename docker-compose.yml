@@ -61,7 +61,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
       AI_WORKER_URL: http://juschill-ai-worker:8001
-    ports: ["8000:8000"]
+    ports: ["8080:8080"]
     volumes:
       - uploads_data:/data/uploads
     mem_limit: 512m
@@ -69,7 +69,7 @@ services:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -83,7 +83,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      GO_API_URL: http://juschill-go-api:8000
+      GO_API_URL: http://juschill-go-api:8080
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       STORAGE_PATH: /data/uploads
     volumes:
@@ -110,7 +110,7 @@ services:
     env_file: .env
     environment:
       RTMP_BIND: 0.0.0.0:1935
-      GO_API_URL: http://juschill-go-api:8000
+      GO_API_URL: http://juschill-go-api:8080
       HLS_OUTPUT_DIR: /tmp/juschill/hls
     ports: ["1935:1935"]
     volumes:
@@ -123,8 +123,8 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./frontend/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
         NEXT_PUBLIC_HLS_BASE_URL: ${HLS_BASE_URL}

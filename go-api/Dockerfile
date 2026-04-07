@@ -11,5 +11,5 @@ RUN apk add --no-cache ca-certificates wget ffmpeg
 WORKDIR /app
 COPY --from=builder /app/server .
 RUN mkdir -p /data/uploads
-EXPOSE 8000
+EXPOSE 8080
 CMD ["/app/server"]

@@ -18,18 +18,36 @@ steps:
     args: ['build', '-t', 'us-east1-docker.pkg.dev/$PROJECT_ID/juschill-repo/ai-worker:$COMMIT_SHA', '-t', 'us-east1-docker.pkg.dev/$PROJECT_ID/juschill-repo/ai-worker:latest', './ai-worker']
     id: build-ai-worker
 
+  # ── Push Go API ──
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-east1-docker.pkg.dev/$PROJECT_ID/juschill-repo/go-api:$COMMIT_SHA']
+    waitFor: [build-go-api]
+    id: push-go-api
+
+  # ── Push Rust Ingest ──
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-east1-docker.pkg.dev/$PROJECT_ID/juschill-repo/ingest:$COMMIT_SHA']
+    waitFor: [build-ingest]
+    id: push-ingest
+
+  # ── Push AI Worker ──
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-east1-docker.pkg.dev/$PROJECT_ID/juschill-repo/ai-worker:$COMMIT_SHA']
+    waitFor: [build-ai-worker]
+    id: push-ai-worker
+
   # ── Deploy to GKE ──
-  # Note: Updated to us-east1-b to match your setup script
   - name: 'gcr.io/cloud-builders/kubectl'
     args:
       - set
       - image
       - deployment/go-api
       - go-api=us-east1-docker.pkg.dev/$PROJECT_ID/juschill-repo/go-api:$COMMIT_SHA
+      - --namespace=ucanjuschill
     env:
       - 'CLOUDSDK_COMPUTE_ZONE=us-east1-b'
-      - 'CLOUDSDK_CONTAINER_CLUSTER=juschill-cluster'
-    waitFor: [build-go-api]
+      - 'CLOUDSDK_CONTAINER_CLUSTER=titan-cluster'
+    waitFor: [push-go-api]
 
   - name: 'gcr.io/cloud-builders/kubectl'
     args:
@@ -37,10 +55,23 @@ steps:
       - image
       - deployment/ingest
       - ingest=us-east1-docker.pkg.dev/$PROJECT_ID/juschill-repo/ingest:$COMMIT_SHA
+      - --namespace=ucanjuschill
     env:
       - 'CLOUDSDK_COMPUTE_ZONE=us-east1-b'
-      - 'CLOUDSDK_CONTAINER_CLUSTER=juschill-cluster'
-    waitFor: [build-ingest]
+      - 'CLOUDSDK_CONTAINER_CLUSTER=titan-cluster'
+    waitFor: [push-ingest]
+
+  - name: 'gcr.io/cloud-builders/kubectl'
+    args:
+      - set
+      - image
+      - deployment/ai-worker
+      - ai-worker=us-east1-docker.pkg.dev/$PROJECT_ID/juschill-repo/ai-worker:$COMMIT_SHA
+      - --namespace=ucanjuschill
+    env:
+      - 'CLOUDSDK_COMPUTE_ZONE=us-east1-b'
+      - 'CLOUDSDK_CONTAINER_CLUSTER=titan-cluster'
+    waitFor: [push-ai-worker]
 
 images:
   - 'us-east1-docker.pkg.dev/$PROJECT_ID/juschill-repo/go-api:$COMMIT_SHA'
