@@ -1,12 +1,13 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json* ./
+COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci --legacy-peer-deps
 
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY frontend/ .
+COPY prisma/ ./prisma/
 
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_HLS_BASE_URL
@@ -17,6 +18,7 @@ ENV NEXT_PUBLIC_HLS_BASE_URL=$NEXT_PUBLIC_HLS_BASE_URL
 ENV NEXT_PUBLIC_RTMP_URL=$NEXT_PUBLIC_RTMP_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 
+RUN npx prisma generate --no-engine
 RUN npm run build
 
 FROM node:20-alpine AS runner
