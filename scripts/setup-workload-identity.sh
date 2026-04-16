@@ -1,32 +1,26 @@
 #!/bin/bash
+set -e
 
-# Set up GCP Service Account and Workload Identity for GKE
+PROJECT_ID="gen-lang-client-0695165560"
+CLUSTER_NAME="titan-cluster"
+ZONE="us-east1-b"
+SA_NAME="ai-worker"
 
-# Variables
-PROJECT_ID="your-project-id"
-CLUSTER_NAME="your-cluster-name"
-ZONE="your-zone"
-SERVICE_ACCOUNT_NAME="your-service-account-name"
+echo "Activating Sovereign Moat Identity..."
 
-# Enable Workload Identity on the GKE cluster
-gcloud container clusters update $CLUSTER_NAME \
-  --workload-pool=$PROJECT_ID.svc.id.goog
+# Enable APIs
+gcloud services enable aiplatform.googleapis.com speech.googleapis.com texttospeech.googleapis.com --project=$PROJECT_ID
 
-# Create a service account
-gcloud iam service-accounts create $SERVICE_ACCOUNT_NAME \
-  --project=$PROJECT_ID
+# Create GCP SA if not exists
+gcloud iam service-accounts create $SA_NAME --project=$PROJECT_ID || echo "SA already exists"
 
-# Grant permissions to the service account
-# Specify the roles your workload will need
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:$SERVICE_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/your.role"
+# Grant Roles
+ROLES=("roles/aiplatform.user" "roles/texttospeech.admin" "roles/speech.admin")
+for role in "${ROLES[@]}"; do
+  gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_NAME@$PROJECT_ID.iam.gserviceaccount.com" --role="$role"
+done
 
-# Create a Kubernetes service account
-kubectl create serviceaccount $SERVICE_ACCOUNT_NAME
-
-# Bind the Kubernetes service account to the GCP service account
-kubectl annotate serviceaccount $SERVICE_ACCOUNT_NAME \
-  iam.gke.io/gcp-service-account=$SERVICE_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccount.com
-
-echo "Workload Identity setup complete!"
+# Bind to K8s
+gcloud iam service-accounts add-iam-policy-binding $SA_NAME@$PROJECT_ID.iam.gserviceaccount.com \
+    --role roles/iam.workloadIdentityUser \
+    --member "serviceAccount:$PROJECT_ID.svc.id.goog[ucanjuschill/ai-worker]"
