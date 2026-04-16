@@ -58,8 +58,6 @@ services:
       GIN_MODE: release
       STORAGE_PATH: /data/uploads
       HLS_BASE_URL: ${HLS_BASE_URL}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY}
       AI_WORKER_URL: http://juschill-ai-worker:8001
     ports: ["8000:8000"]
     volumes:
@@ -83,9 +81,11 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      GO_API_URL: http://juschill-go-api:8000
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      STORAGE_PATH: /data/uploads
+     GO_API_URL: http://juschill-go-api:8080
+STORAGE_PATH: /data/uploads
+GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+GCP_REGION: ${GCP_REGION}
+GOOGLE_APPLICATION_CREDENTIALS: /var/secrets/google/key.json
     volumes:
       - uploads_data:/data/uploads
       - ai_tmp:/tmp/juschill
