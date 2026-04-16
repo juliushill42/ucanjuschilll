@@ -1,7 +1,6 @@
 # ============================================================
-# UCANJUSCHILL — Kubernetes Manifests
-# Julius Cameron Hill IP
-# All services: Go API, Rust Ingest, AI Worker, Redis, Nginx
+# UCANJUSCHILL — Kubernetes Manifests (Vertex AI Edition)
+# Julius Cameron Hill IP — Sovereign Moat Protection
 # ============================================================
 
 apiVersion: v1
@@ -10,7 +9,17 @@ metadata:
   name: ucanjuschill
 
 ---
-# ── Go API Deployment ──
+# ── AI Worker Service Account (Workload Identity) ──
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-worker
+  namespace: ucanjuschill
+  annotations:
+    iam.gke.io/gcp-service-account: ai-worker@gen-lang-client-0695165560.iam.gserviceaccount.com
+
+---
+# ── Go API Deployment (Standardized Port 8080) ──
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,7 +37,7 @@ spec:
     spec:
       containers:
         - name: go-api
-          image: us-central1-docker.pkg.dev/ucanjuschill-prod/ucanjuschill/go-api:latest
+          image: us-east1-docker.pkg.dev/gen-lang-client-0695165560/juschill-repo/go-api:latest
           ports:
             - containerPort: 8080
           env:
@@ -49,6 +58,8 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: redis-url
+            - name: AI_WORKER_URL
+              value: "http://ai-worker:8001"
           resources:
             requests:
               cpu: 250m
@@ -61,13 +72,11 @@ spec:
               path: /health
               port: 8080
             initialDelaySeconds: 5
-            periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /health
               port: 8080
             initialDelaySeconds: 15
-            periodSeconds: 20
 
 ---
 apiVersion: v1
@@ -83,7 +92,60 @@ spec:
       targetPort: 8080
 
 ---
-# ── Rust Ingest (RTMP) ──
+# ── AI Worker Deployment (Vertex AI & Speech Logic) ──
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-worker
+  namespace: ucanjuschill
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-worker
+  template:
+    metadata:
+      labels:
+        app: ai-worker
+    spec:
+      serviceAccountName: ai-worker
+      containers:
+        - name: ai-worker
+          image: us-east1-docker.pkg.dev/gen-lang-client-0695165560/juschill-repo/ai-worker:latest
+          ports:
+            - containerPort: 8001
+          env:
+            - name: GO_API_URL
+              value: "http://go-api:8080"
+            - name: GCP_PROJECT_ID
+              value: "gen-lang-client-0695165560"
+            - name: GCP_REGION
+              value: "us-central1"
+            - name: STORAGE_PATH
+              value: "/data/uploads"
+          resources:
+            requests:
+              cpu: 1000m
+              memory: 2Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-worker
+  namespace: ucanjuschill
+spec:
+  selector:
+    app: ai-worker
+  ports:
+    - port: 8001
+      targetPort: 8001
+
+---
+# ── Rust Ingest (RTMP Ingest) ──
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -101,7 +163,7 @@ spec:
     spec:
       containers:
         - name: ingest
-          image: us-central1-docker.pkg.dev/ucanjuschill-prod/ucanjuschill/ingest:latest
+          image: us-east1-docker.pkg.dev/gen-lang-client-0695165560/juschill-repo/ingest:latest
           ports:
             - containerPort: 1935
           env:
@@ -109,15 +171,10 @@ spec:
               value: "0.0.0.0:1935"
             - name: GO_API_URL
               value: "http://go-api:8080"
-            - name: HLS_BUCKET
-              value: "gs://ucanjuschill-prod-hls"
           resources:
             requests:
               cpu: 500m
               memory: 512Mi
-            limits:
-              cpu: 1000m
-              memory: 1Gi
 
 ---
 apiVersion: v1
@@ -135,42 +192,7 @@ spec:
       name: rtmp
 
 ---
-# ── AI Worker ──
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ai-worker
-  namespace: ucanjuschill
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: ai-worker
-  template:
-    metadata:
-      labels:
-        app: ai-worker
-    spec:
-      containers:
-        - name: ai-worker
-          image: us-central1-docker.pkg.dev/ucanjuschill-prod/ucanjuschill/ai-worker:latest
-          env:
-            - name: GO_API_URL
-              value: "http://go-api:8080"
-            - name: VERTEX_PROJECT
-              value: "ucanjuschill-prod"
-            - name: VERTEX_REGION
-              value: "us-central1"
-          resources:
-            requests:
-              cpu: 500m
-              memory: 1Gi
-            limits:
-              cpu: 2000m
-              memory: 2Gi
-
----
-# ── Redis ──
+# ── Redis (Internal Cache) ──
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -189,22 +211,8 @@ spec:
       containers:
         - name: redis
           image: redis:7-alpine
-          command: ["redis-server", "--appendonly", "yes"]
           ports:
             - containerPort: 6379
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 200m
-              memory: 256Mi
-          volumeMounts:
-            - name: redis-data
-              mountPath: /data
-      volumes:
-        - name: redis-data
-          emptyDir: {}
 
 ---
 apiVersion: v1
@@ -220,7 +228,7 @@ spec:
       targetPort: 6379
 
 ---
-# ── Nginx (CDN + SSL) ──
+# ── Nginx Reverse Proxy (Frontend + API Gateway) ──
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -241,15 +249,6 @@ spec:
           image: nginx:alpine
           ports:
             - containerPort: 80
-            - containerPort: 443
-          resources:
-            requests:
-              cpu: 100m
-              memory: 64Mi
-            limits:
-              cpu: 200m
-              memory: 128Mi
-
 ---
 apiVersion: v1
 kind: Service
@@ -266,28 +265,3 @@ spec:
     - port: 80
       targetPort: 80
       name: http
-    - port: 443
-      targetPort: 443
-      name: https
-
----
-# ── Horizontal Pod Autoscaler ──
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: go-api-hpa
-  namespace: ucanjuschill
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: go-api
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
