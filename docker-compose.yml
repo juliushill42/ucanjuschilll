@@ -59,7 +59,7 @@ services:
       STORAGE_PATH: /data/uploads
       HLS_BASE_URL: ${HLS_BASE_URL}
       AI_WORKER_URL: http://juschill-ai-worker:8001
-    ports: ["8000:8000"]
+    ports: ["8080:8080"]
     volumes:
       - uploads_data:/data/uploads
     mem_limit: 512m
@@ -67,7 +67,7 @@ services:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
