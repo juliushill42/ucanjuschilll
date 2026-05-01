@@ -1,7 +1,7 @@
 version: '3.9'
 
 # =============================================================================
-# JUSCHILL PLATFORM — Production Docker Compose
+# JUSCHILL PLATFORM — Production Docker Compose  (JCH-2026 IP)
 # Voice & Vision + Artist Social Network
 # Built on ASTRA streaming infrastructure
 # Zero hardcoded secrets — all from .env
@@ -14,9 +14,9 @@ services:
     container_name: juschill-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_USER:     ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_DB:       ${POSTGRES_DB}
     ports: ["5432:5432"]
     volumes:
       - ./init-db:/docker-entrypoint-initdb.d
@@ -52,22 +52,23 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@juschill-db:5432/${POSTGRES_DB}
-      JWT_SECRET: ${JWT_SECRET}
-      REDIS_URL: redis://:${REDIS_PASSWORD}@juschill-cache:6379
-      GIN_MODE: release
-      STORAGE_PATH: /data/uploads
-      HLS_BASE_URL: ${HLS_BASE_URL}
-      AI_WORKER_URL: http://juschill-ai-worker:8001
-    ports: ["8080:8080"]
+      DATABASE_URL:   postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@juschill-db:5432/${POSTGRES_DB}
+      JWT_SECRET:     ${JWT_SECRET}
+      REDIS_URL:      redis://:${REDIS_PASSWORD}@juschill-cache:6379
+      GIN_MODE:       release
+      STORAGE_PATH:   /data/uploads
+      HLS_BASE_URL:   ${HLS_BASE_URL}
+      AI_WORKER_URL:  http://juschill-ai-worker:8001
+      PORT:           "8000"
+    ports: ["8000:8000"]
     volumes:
       - uploads_data:/data/uploads
     mem_limit: 512m
     depends_on:
       postgres: {condition: service_healthy}
-      redis: {condition: service_healthy}
+      redis:    {condition: service_healthy}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -81,14 +82,15 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-     GO_API_URL: http://juschill-go-api:8080
-STORAGE_PATH: /data/uploads
-GCP_PROJECT_ID: ${GCP_PROJECT_ID}
-GCP_REGION: ${GCP_REGION}
-GOOGLE_APPLICATION_CREDENTIALS: /var/secrets/google/key.json
+      GO_API_URL:                    http://juschill-go-api:8000
+      STORAGE_PATH:                  /data/uploads
+      GCP_PROJECT_ID:                ${GCP_PROJECT_ID}
+      GCP_REGION:                    ${GCP_REGION}
+      GOOGLE_APPLICATION_CREDENTIALS: /var/secrets/google/key.json
     volumes:
       - uploads_data:/data/uploads
       - ai_tmp:/tmp/juschill
+      - ${GCP_KEY_PATH:-./gcp-key.json}:/var/secrets/google/key.json:ro
     mem_limit: 4g
     cpus: "4.0"
     depends_on:
@@ -109,8 +111,8 @@ GOOGLE_APPLICATION_CREDENTIALS: /var/secrets/google/key.json
     restart: unless-stopped
     env_file: .env
     environment:
-      RTMP_BIND: 0.0.0.0:1935
-      GO_API_URL: http://juschill-go-api:8000
+      RTMP_BIND:      0.0.0.0:1935
+      GO_API_URL:     http://juschill-go-api:8000
       HLS_OUTPUT_DIR: /tmp/juschill/hls
     ports: ["1935:1935"]
     volumes:
@@ -118,23 +120,23 @@ GOOGLE_APPLICATION_CREDENTIALS: /var/secrets/google/key.json
       - hls_data:/tmp/juschill/hls
     mem_limit: 1g
     depends_on:
-      go-api: {condition: service_healthy}
-      ai-worker: {condition: service_healthy}
+      go-api:     {condition: service_healthy}
+      ai-worker:  {condition: service_healthy}
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_API_URL:      ${NEXT_PUBLIC_API_URL}
         NEXT_PUBLIC_HLS_BASE_URL: ${HLS_BASE_URL}
-        NEXT_PUBLIC_RTMP_URL: ${RTMP_URL}
+        NEXT_PUBLIC_RTMP_URL:     ${RTMP_URL}
     image: juschill/frontend:latest
     container_name: juschill-frontend
     restart: unless-stopped
     env_file: .env
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_API_URL:      ${NEXT_PUBLIC_API_URL}
       NEXT_PUBLIC_HLS_BASE_URL: ${HLS_BASE_URL}
     ports: ["3000:3000"]
     mem_limit: 512m
