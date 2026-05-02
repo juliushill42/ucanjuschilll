@@ -4,7 +4,7 @@ import {
   AIJob, LiveStream, Notification, UploadResponse, AIJobType
 } from '@/types';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 class APIClient {
   private client: AxiosInstance;

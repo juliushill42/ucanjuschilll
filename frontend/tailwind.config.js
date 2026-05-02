@@ -1,50 +1,42 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    './pages/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {
+      fontFamily: {
+        display: ['Bebas Neue', 'sans-serif'],
+        sans: ['Syne', 'sans-serif'],
+        body: ['DM Sans', 'sans-serif'],
+      },
       colors: {
         brand: {
-          50:  '#fff0f3',
-          100: '#ffe0e9',
-          200: '#ffc0d3',
-          300: '#ff91ad',
-          400: '#ff5280',
-          500: '#ff1a57',
-          600: '#e8003a',
-          700: '#c4002f',
-          800: '#a2002b',
-          900: '#880029',
+          300: '#C4B5FD',
+          400: '#A78BFA',
+          500: '#8B5CF6',
+          600: '#7C3AED',
+          700: '#6D28D9',
         },
         dark: {
-          950: '#0a0a0f',
-          900: '#0f0f18',
-          800: '#161623',
-          700: '#1e1e2e',
-          600: '#272738',
+          500: '#2D2640',
+          600: '#1E1B2E',
+          700: '#13111F',
+          800: '#0D0B18',
+          900: '#080612',
         },
-      },
-      fontFamily: {
-        sans: ['Inter var', 'Inter', 'system-ui', 'sans-serif'],
-        display: ['Syne', 'Inter var', 'sans-serif'],
       },
       animation: {
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'fade-up': 'fadeUp 0.3s ease-out',
-        'slide-in': 'slideIn 0.2s ease-out',
+        'fade-up': 'fadeUp 0.6s ease forwards',
+        'fade-in': 'fadeIn 0.5s ease forwards',
+        'glow': 'glow 2s ease-in-out infinite',
       },
       keyframes: {
-        fadeUp: {
-          '0%': { opacity: '0', transform: 'translateY(8px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        slideIn: {
-          '0%': { opacity: '0', transform: 'translateX(-8px)' },
-          '100%': { opacity: '1', transform: 'translateX(0)' },
-        },
+        fadeUp: { '0%': { opacity: '0', transform: 'translateY(24px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+        glow: { '0%,100%': { boxShadow: '0 0 20px rgba(139,92,246,0.3)' }, '50%': { boxShadow: '0 0 40px rgba(139,92,246,0.6)' } },
       },
     },
   },

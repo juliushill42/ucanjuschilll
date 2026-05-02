@@ -2,163 +2,153 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Nav from '@/components/Nav';
-import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { api } from '@/lib/api';
+
+const GENRES = ['Hip-Hop', 'R&B', 'Pop', 'Soul', 'Gospel', 'Trap', 'Afrobeats', 'Reggae', 'Country', 'Rock', 'Lo-fi', 'Jazz', 'Electronic', 'Other'];
 
 export default function UploadPage() {
-  const { user, initialized, initialize } = useAuth();
   const router = useRouter();
-  const [file, setFile] = useState<File | null>(null);
-  const [fileType, setFileType] = useState<'audio' | 'video' | ''>('');
+  const { user, initialized, initialize } = useAuth();
+  const audioRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [genre, setGenre] = useState('');
-  const [tags, setTags] = useState('');
-  const [progress, setProgress] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { if (!initialized) initialize(); }, [initialized, initialize]);
-  useEffect(() => { if (!user && initialized) router.push('/login'); }, [user, initialized, router]);
+  useEffect(() => {
+    if (!initialized) initialize();
+  }, [initialized, initialize]);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setFile(f);
-    if (f.type.startsWith('audio/')) setFileType('audio');
-    else if (f.type.startsWith('video/')) setFileType('video');
-    else { setError('Only audio or video files allowed'); setFile(null); }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    const f = e.dataTransfer.files[0];
-    if (!f) return;
-    setFile(f);
-    if (f.type.startsWith('audio/')) setFileType('audio');
-    else if (f.type.startsWith('video/')) setFileType('video');
-    else setError('Only audio or video files allowed');
-  };
+  useEffect(() => {
+    if (initialized && !user) router.push('/login');
+  }, [initialized, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file || !title.trim()) return;
+    if (!title || (!audioFile && !videoFile)) { setError('Add a title and at least one file'); return; }
     setError('');
-    setLoading(true);
-    setProgress(0);
+    setUploading(true);
+
     try {
-      let mediaUrl = '';
-      if (fileType === 'audio') {
-        const res = await api.uploadAudio(file, setProgress);
-        mediaUrl = res.url;
-      } else {
-        const res = await api.uploadVideo(file, setProgress);
-        mediaUrl = res.url;
+      let audioUrl = '', videoUrl = '';
+      const type: 'audio' | 'video' | 'av' = audioFile && videoFile ? 'av' : audioFile ? 'audio' : 'video';
+
+      if (audioFile) {
+        const r = await api.uploadAudio(audioFile, setAudioProgress);
+        audioUrl = r.url;
+      }
+      if (videoFile) {
+        const r = await api.uploadVideo(videoFile, setVideoProgress);
+        videoUrl = r.url;
       }
 
-      const post = await api.createPost({
-        title: title.trim(),
-        description: description.trim(),
-        post_type: fileType as 'audio' | 'video',
-        audio_url: fileType === 'audio' ? mediaUrl : '',
-        video_url: fileType === 'video' ? mediaUrl : '',
-        genre: genre.trim(),
-        tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
-      });
-
-      // Auto-trigger AI processing
-      if (fileType === 'audio') {
-        await api.triggerAIProcess(post.id, 'noise_reduction');
-        await api.triggerAIProcess(post.id, 'master');
-        await api.triggerAIProcess(post.id, 'captions');
-      } else {
-        await api.triggerAIProcess(post.id, 'thumbnail');
-      }
-
-      router.push(`/posts/${post.id}`);
+      await api.createPost({ title, description, post_type: type, audio_url: audioUrl, video_url: videoUrl, genre });
+      router.push('/studio');
     } catch (err: any) {
-      setError(err?.response?.data?.error || err?.message || 'Upload failed');
+      setError(err?.response?.data?.error || 'Upload failed. Try again.');
     } finally {
-      setLoading(false);
+      setUploading(false);
     }
   };
 
-  const formatSize = (bytes: number) => {
-    if (bytes > 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-    return `${(bytes / 1024).toFixed(0)} KB`;
-  };
-
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-dark-900">
       <Nav />
       <main className="flex-1 md:ml-64 pb-24 md:pb-8">
-        <div className="max-w-lg mx-auto px-4 py-6">
-          <div className="mb-6">
-            <h1 className="font-display text-2xl font-extrabold text-white">➕ Drop a File</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Upload existing audio or video. AI processes it automatically.</p>
-          </div>
+        <div className="max-w-xl mx-auto px-4 py-6">
+          <h1 className="font-sans font-extrabold text-2xl text-white mb-1">Drop a Track</h1>
+          <p className="text-gray-500 text-sm font-body mb-8">Share your music with the world</p>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Drop zone */}
-            <div
-              onDrop={handleDrop}
-              onDragOver={(e) => e.preventDefault()}
-              onClick={() => fileRef.current?.click()}
-              className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-colors ${file ? 'border-green-500/50 bg-green-500/5' : 'border-dark-600 hover:border-brand-500 bg-dark-800'}`}
-            >
-              <input ref={fileRef} type="file" accept="audio/*,video/*" className="hidden" onChange={handleFile} />
-              {file ? (
-                <div>
-                  <p className="text-3xl mb-2">{fileType === 'audio' ? '🎵' : '🎬'}</p>
-                  <p className="text-white font-medium truncate">{file.name}</p>
-                  <p className="text-gray-500 text-sm mt-1">{formatSize(file.size)}</p>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); setFile(null); setFileType(''); }} className="text-xs text-gray-600 hover:text-red-400 mt-2">Remove</button>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-4xl mb-3">📁</p>
-                  <p className="text-white font-medium mb-1">Drag & drop or tap to browse</p>
-                  <p className="text-gray-500 text-sm">MP3, WAV, FLAC, MP4, MOV · Max 500MB</p>
-                </div>
-              )}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3 mb-6 font-body">{error}</div>
+          )}
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <div>
+              <label className="text-xs text-gray-500 font-sans mb-1.5 block tracking-wide uppercase">Title *</label>
+              <input type="text" className="input" placeholder="Track name" value={title} onChange={(e) => setTitle(e.target.value)} required />
             </div>
 
-            {file && (
-              <>
-                <input className="input" placeholder="Title *" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
-                <textarea className="input resize-none" rows={3} placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} />
-                <select className="input" value={genre} onChange={(e) => setGenre(e.target.value)}>
-                  <option value="">Select genre (optional)</option>
-                  {['Hip-Hop','R&B','Pop','Soul','Gospel','Trap','Afrobeats','Reggae','Country','Rock','Lo-fi','Jazz','Electronic','Other'].map((g) => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
-                </select>
-                <input className="input" placeholder="Tags: trap, melodic (comma separated)" value={tags} onChange={(e) => setTags(e.target.value)} />
-              </>
-            )}
+            <div>
+              <label className="text-xs text-gray-500 font-sans mb-1.5 block tracking-wide uppercase">Description</label>
+              <textarea
+                className="input resize-none"
+                rows={3}
+                placeholder="Tell your story..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
 
-            {error && <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm">{error}</div>}
+            <div>
+              <label className="text-xs text-gray-500 font-sans mb-1.5 block tracking-wide uppercase">Genre</label>
+              <select className="input" value={genre} onChange={(e) => setGenre(e.target.value)}>
+                <option value="">Select genre</option>
+                {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
 
-            {loading && (
-              <div>
-                <div className="flex justify-between text-xs text-gray-500 mb-1"><span>Uploading...</span><span>{progress}%</span></div>
-                <div className="h-1.5 bg-dark-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-brand-500 transition-all duration-200" style={{ width: `${progress}%` }} />
-                </div>
+            {/* Audio drop zone */}
+            <div>
+              <label className="text-xs text-gray-500 font-sans mb-1.5 block tracking-wide uppercase">Audio File</label>
+              <div
+                onClick={() => audioRef.current?.click()}
+                className="border-2 border-dashed border-dark-600 hover:border-brand-500/50 rounded-xl p-8 text-center cursor-pointer transition-colors"
+              >
+                {audioFile ? (
+                  <div>
+                    <p className="text-brand-400 font-sans font-medium">{audioFile.name}</p>
+                    {audioProgress > 0 && audioProgress < 100 && (
+                      <div className="mt-3 bg-dark-600 rounded-full h-1"><div className="bg-brand-500 h-1 rounded-full transition-all" style={{ width: `${audioProgress}%` }} /></div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-3xl mb-2">🎵</p>
+                    <p className="text-gray-500 text-sm font-body">Click to add audio</p>
+                    <p className="text-gray-600 text-xs font-body mt-1">MP3, WAV, FLAC supported</p>
+                  </div>
+                )}
+                <input ref={audioRef} type="file" accept="audio/*" className="hidden" onChange={(e) => setAudioFile(e.target.files?.[0] || null)} />
               </div>
-            )}
+            </div>
 
-            {file && (
-              <button type="submit" disabled={loading || !title.trim()} className="btn-primary w-full py-4 text-base">
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Uploading...
-                  </span>
-                ) : '🚀 Publish'}
-              </button>
-            )}
+            {/* Video drop zone */}
+            <div>
+              <label className="text-xs text-gray-500 font-sans mb-1.5 block tracking-wide uppercase">Video File <span className="text-gray-600 normal-case">(optional)</span></label>
+              <div
+                onClick={() => videoRef.current?.click()}
+                className="border-2 border-dashed border-dark-600 hover:border-brand-500/50 rounded-xl p-8 text-center cursor-pointer transition-colors"
+              >
+                {videoFile ? (
+                  <div>
+                    <p className="text-brand-400 font-sans font-medium">{videoFile.name}</p>
+                    {videoProgress > 0 && videoProgress < 100 && (
+                      <div className="mt-3 bg-dark-600 rounded-full h-1"><div className="bg-brand-500 h-1 rounded-full transition-all" style={{ width: `${videoProgress}%` }} /></div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-3xl mb-2">🎬</p>
+                    <p className="text-gray-500 text-sm font-body">Click to add video</p>
+                    <p className="text-gray-600 text-xs font-body mt-1">MP4, MOV supported</p>
+                  </div>
+                )}
+                <input ref={videoRef} type="file" accept="video/*" className="hidden" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} />
+              </div>
+            </div>
+
+            <button type="submit" disabled={uploading} className="btn-primary w-full py-3.5 text-base rounded-xl mt-2">
+              {uploading ? 'Uploading...' : 'Release It 🚀'}
+            </button>
           </form>
         </div>
       </main>
